@@ -1,18 +1,18 @@
 use std::env;
-use std::ops::Deref;
 use std::io::prelude::*;
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::net::{TcpListener, TcpStream};
-use std::net::{ToSocketAddrs, SocketAddr};
+
+mod transport;
+use transport::{tcp, udp};
 
 // Desired count
 // n = 2F + 1 where F is failed/inactive nodes
 
-enum Mode {
-    MASTER,
-    SERVANT,
-}
+// enum Mode {
+    // MASTER,
+    // SERVANT,
+// }
 
 #[derive(Debug)]
 enum Status {
@@ -29,13 +29,18 @@ struct Node {
 #[derive(Debug)]
 struct NodeManager {
     nodes: HashMap<String, Node>,
+    transport: Box<transport::Adapter>,
 }
 
 impl NodeManager {
 
-    fn new(nodes: HashMap<String, Node>) -> NodeManager {
+    fn new(
+        nodes: HashMap<String, Node>,
+        transport: Box<transport::Adapter>,
+    ) -> NodeManager {
         NodeManager {
-            nodes: nodes,
+            nodes,
+            transport,
         }
     }
 
@@ -47,7 +52,7 @@ impl NodeManager {
         self.nodes.remove(&id);
     }
 
-    fn heart_beat(n: Node) {
+    fn heart_beat(_n: Node) {
         // n.addr
     }
 
@@ -134,7 +139,7 @@ fn main() {
 
     println!("{:?}", args);
 
-    if args[1] == "master" {
+    if args[1] == String::from("master") {
         println!("Running in master mode");
 
         let master_node = Node {
@@ -144,7 +149,9 @@ fn main() {
 
         let mut nodes = HashMap::new();
         nodes.insert(String::from("master"), master_node);
-        let manager = NodeManager::new(nodes);
+
+        let adapter = tcp::Tcp::new();
+        let manager = NodeManager::new(nodes, adapter);
 
         let mut server = Server::new(manager);
         match server.start(String::from("localhost:2222")) {
@@ -153,10 +160,15 @@ fn main() {
         };
     }
 
-    if args[1] == "servant" && args[2] != "" {
+    if args[1] == String::from("servant") && args[2] != String::from("") {
         println!("Servant mode");
 
-        let manager = NodeManager::new(HashMap::new());
+        let adapter = tcp::Tcp::new();
+        let manager = NodeManager::new(
+            HashMap::new(),
+            adapter,
+        );
+
         // @todo - should handle finding an available port more gracefully here...
         let mut client = Server::new(manager);
         match client.connect(args[2].to_string()) {
