@@ -1,31 +1,31 @@
-pub mod transport {
-  pub trait Adapter {
-    fn connect(self, addr: String) -> std::io::Result<()>;
-    fn disconnect(self) -> std::io::Result<()>;
-    fn listen(self) -> std::io::Result<()>;
+use crate::transport::handler::Callback;
+
+pub trait Adapter {
+  fn connect(self, addr: String) -> std::io::Result<()>;
+  fn disconnect(self) -> std::io::Result<()>;
+  fn listen(self, handler: &dyn Callback) -> std::io::Result<()>;
+}
+
+pub struct Transport<'a> {
+  adapter: Box<dyn Adapter>,
+}
+
+impl Transport<'_> {
+  fn new(adapter: Box<dyn Adapter>) -> Transport {
+    Transport {
+      adapter,
+    }
   }
 
-  pub struct Transport<'a> {
-    adapter: &'a dyn Adapter,
+  fn connect(self, addr: String) -> std::io::Result<()> {
+    self.adapter.connect(addr)
   }
 
-  impl Transport {
-    fn new(adapter: &impl Adapter) -> Transport {
-      Transport {
-        adapter,
-      }
-    }
+  fn disconnect(self) -> std::io::Result<()> {
+    self.adapter.disconnect()
+  }
 
-    fn connect(self, addr: String) -> std::io::Result<()> {
-      self.adapter.connect(addr: String)
-    }
-
-    fn disconnect(self) -> std::io::Result<()> {
-      self.adapter.disconnect()
-    }
-
-    fn listen(self) -> std::io::Result<()> {
-      self.adapter.listen()
-    }
+  fn listen(self, handler: &dyn Callback) -> std::io::Result<()> {
+    self.adapter.listen(handler)
   }
 }

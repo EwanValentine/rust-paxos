@@ -1,12 +1,15 @@
+extern crate tokio;
+
 use std::env;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
 
 mod transport;
-use transport::{tcp, udp};
 use std::borrow::Borrow;
-use crate::transport::transport::transport::Transport;
+use crate::transport::transport::{Transport, Adapter};
+use crate::transport::tcp::Tcp;
+use std::error::Error;
 
 // Desired count
 // n = 2F + 1 where F is failed/inactive nodes
@@ -31,14 +34,13 @@ struct Node {
 #[derive(Debug)]
 struct NodeManager {
     nodes: HashMap<String, Node>,
-    transport: Box<transport::Adapter>,
+    transport: Box<Adapter>,
 }
 
 impl NodeManager {
-
     fn new(
         nodes: HashMap<String, Node>,
-        transport: Box<transport::Adapter>,
+        transport: Box<dyn Adapter>,
     ) -> NodeManager {
         NodeManager {
             nodes,
@@ -70,7 +72,7 @@ impl NodeManager {
 struct Server {
     addr: String,
     manager: NodeManager,
-    pub transport: Box<dyn transport::Adapter>,
+    pub transport: Box<dyn Adapter>,
 }
 
 impl Server {
@@ -79,7 +81,7 @@ impl Server {
     // it also takes a transport adapter, for spinning up the leader node. The communication
     // between client to leader node, and leader node to follower nodes, are decoupled,
     // so that they can use different protocols.
-    pub fn new(manager: NodeManager, transport: Box<dyn transport::Adapter>) -> Self {
+    pub fn new(manager: NodeManager, transport: Box<dyn Adapter>) -> Self {
         Server {
             addr: "localhost:2222".to_string(),
             manager,
@@ -127,7 +129,8 @@ impl Server {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Create state for desired count
     // and node status. I.e n reachable nodes, include heart beat perhaps
@@ -153,9 +156,13 @@ fn main() {
         let mut nodes = HashMap::new();
         nodes.insert(String::from("master"), master_node);
 
-        let adapter = tcp::Tcp::new();
-        let manager = NodeManager::new(nodes, adapter);
+        let adapter = Box::from(Tcp::new());
+        let manager = NodeManager::new(
+            nodes,
+            adapter,
+        );
 
+        let adapter = Box::from(Tcp::new());
         let mut server = Server::new(manager, adapter);
         match server.start(String::from("localhost:2222")) {
             Ok(()) => println!("server running"),
@@ -166,14 +173,15 @@ fn main() {
     if args[1] == String::from("servant") && args[2] != String::from("") {
         println!("Servant mode");
 
-        let adapter = tcp::Tcp::new();
+        let adapter = Box::from(Tcp::new());
         let manager = NodeManager::new(
             HashMap::new(),
             adapter,
         );
 
+        let adapter = Box::from(Tcp::new());
         // @todo - should handle finding an available port more gracefully here...
-        let mut client = Server::new(manager);
+        let mut client = Server::new(manager, adapter);
         match client.connect(args[2].to_string()) {
             Ok(()) => println!("Connected to master node on: {:?}", args[2]),
             Err(e) => panic!("failed to connect to master node on: {:?} error: {:?}", args[2], e),
@@ -187,4 +195,6 @@ fn main() {
     }
 
     println!("Hello, world!");
+
+    Ok(())
 }
