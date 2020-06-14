@@ -1,13 +1,15 @@
+use super::handler::{Callback};
+
 pub mod tcp {
     use std::net::{TcpStream, Shutdown};
-    use std::io::Read;
+    use std::io::{Read, Write};
 
     pub struct Tcp {
         stream: Box<TcpStream>,
     }
 
     impl Tcp {
-        fn new() -> Tcp {
+        fn new() -> Self {
             Tcp {
                 stream: nil,
             }
@@ -15,7 +17,7 @@ pub mod tcp {
 
         fn connect(&mut self) -> std::io::Result<()> {
             self.stream = TcpStream::bind(addr.to_string())?;
-            stream.write(format!("connect->{}", addr).as_bytes())?;
+            self.stream.write(format!("connect->{}", addr).as_bytes())?;
             Ok(())
         }
 

@@ -5,6 +5,8 @@ use std::net::{TcpListener, TcpStream};
 
 mod transport;
 use transport::{tcp, udp};
+use std::borrow::Borrow;
+use crate::transport::transport::transport::Transport;
 
 // Desired count
 // n = 2F + 1 where F is failed/inactive nodes
@@ -68,35 +70,36 @@ impl NodeManager {
 struct Server {
     addr: String,
     manager: NodeManager,
+    pub transport: Box<dyn transport::Adapter>,
 }
 
 impl Server {
-    fn new(manager: NodeManager) -> Server {
+
+    // new takes the node manager, which stores a list of references to each node
+    // it also takes a transport adapter, for spinning up the leader node. The communication
+    // between client to leader node, and leader node to follower nodes, are decoupled,
+    // so that they can use different protocols.
+    pub fn new(manager: NodeManager, transport: Box<dyn transport::Adapter>) -> Self {
         Server {
             addr: "localhost:2222".to_string(),
-            manager: manager,
+            manager,
+            transport,
         }
     }
 
-    pub fn start(&mut self, addr: String) -> std::io::Result<()> {
-        let listener = TcpListener::bind(addr.to_string())?;
-        for stream in listener.incoming() {
-            self.handle(stream.unwrap());
-        }
+    pub fn start(&self, addr: String) -> std::io::Result<()> {
+        self.transport.connect(addr);
         Ok(())
     }
 
     pub fn connect(&mut self, addr: String) -> std::io::Result<()> {
-        let mut stream = TcpStream::connect(addr.to_string())?;
+        let mut tr: Transport = self.manager.transport.
+
         stream.write(format!("connect->{}", addr).as_bytes())?;
         Ok(())
     }
 
-    fn handle(&mut self, mut stream: TcpStream) {
-        let mut buffer = [0; 512];
-        stream.read(&mut buffer).unwrap();
-        let msg: String = String::from_utf8_lossy(&buffer[..]).into_owned();
-        println!("Message: {}", msg);
+    fn handle(&mut self, msg: String) {
 
         // Example connect->localhost:1234
         let mut parts = msg.split("->").fuse();
@@ -153,7 +156,7 @@ fn main() {
         let adapter = tcp::Tcp::new();
         let manager = NodeManager::new(nodes, adapter);
 
-        let mut server = Server::new(manager);
+        let mut server = Server::new(manager, adapter);
         match server.start(String::from("localhost:2222")) {
             Ok(()) => println!("server running"),
             Err(e) => panic!("failed to start: {:?}", e),

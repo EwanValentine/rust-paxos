@@ -1,20 +1,28 @@
-use std::net::UdpSocket;
-
 pub mod udp {
-    pub struct Udp {}
+    use std::net::UdpSocket;
+
+    pub struct Udp {
+        stream: Box<UdpSocket>,
+    }
 
     impl Udp {
-        fn new() -> Udp {
-            Udp {}
+        fn new() -> Self {
+            Udp { stream: nil }
         }
 
-        fn connect(addr: String) -> std::io::Result<()> {
-            let mut stream = UdpStream::bind(addr.to_string())?;
-            stream.write(format!("connect->{}", addr).as_bytes())?;
+        fn connect(&mut self, addr: String) -> std::io::Result<()> {
+            self.stream = Box::from(UdpSocket::bind(addr.to_string())?);
+            self.stream.broadcast();
+            Ok(())
         }
 
-        fn disconnect() -> std::io::Result<()> {}
+        fn disconnect(&self) -> std::io::Result<()> {
+            self.stream.leave_multicast_v4();
+            Ok(())
+        }
 
-        fn listen() -> std::io::Result<()> {}
+        fn listen() -> std::io::Result<()> {
+            Ok(())
+        }
     }
 }
