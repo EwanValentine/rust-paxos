@@ -7,7 +7,7 @@ use std::net::{TcpListener, TcpStream};
 
 mod transport;
 use std::borrow::Borrow;
-use crate::transport::transport::{Transport, Adapter};
+use crate::transport::transport::{Adapter, Transport};
 use crate::transport::tcp::Tcp;
 use std::error::Error;
 
@@ -34,13 +34,13 @@ struct Node {
 #[derive(Debug)]
 struct NodeManager {
     nodes: HashMap<String, Node>,
-    transport: Box<Adapter>,
+    transport: Box<Transport>,
 }
 
 impl NodeManager {
     fn new(
         nodes: HashMap<String, Node>,
-        transport: Box<dyn Adapter>,
+        transport: Box<Transport>,
     ) -> NodeManager {
         NodeManager {
             nodes,
@@ -72,7 +72,7 @@ impl NodeManager {
 struct Server {
     addr: String,
     manager: NodeManager,
-    pub transport: Box<dyn Adapter>,
+    pub transport: Box<Transport>,
 }
 
 impl Server {
@@ -81,7 +81,7 @@ impl Server {
     // it also takes a transport adapter, for spinning up the leader node. The communication
     // between client to leader node, and leader node to follower nodes, are decoupled,
     // so that they can use different protocols.
-    pub fn new(manager: NodeManager, transport: Box<dyn Adapter>) -> Self {
+    pub fn new(manager: NodeManager, transport: Box<Transport>) -> Self {
         Server {
             addr: "localhost:2222".to_string(),
             manager,
@@ -89,15 +89,16 @@ impl Server {
         }
     }
 
-    pub fn start(&self, addr: String) -> std::io::Result<()> {
-        self.transport.connect(addr);
-        Ok(())
+    pub fn listen(self) -> std::io::Result<()> {
+        self.transport.listen(self.handle)
     }
 
-    pub fn connect(&mut self, addr: String) -> std::io::Result<()> {
-        let mut tr: Transport = self.manager.transport.
-
-        stream.write(format!("connect->{}", addr).as_bytes())?;
+    pub fn connect(self, addr: String) -> std::io::Result<()> {
+        let stream = self.transport.connect(addr);
+        match stream {
+            Ok(t) => stream.write(format!("connect->{}", addr).as_bytes())?,
+            _ => {}
+        }
         Ok(())
     }
 
@@ -156,41 +157,46 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let mut nodes = HashMap::new();
         nodes.insert(String::from("master"), master_node);
 
-        let adapter = Box::from(Tcp::new());
-        let manager = NodeManager::new(
+        let t: Tcp = Tcp::connect(String::from("localhost:5454"));
+
+        let transport: Box<Transport> = Transport::new(&t);
+        let manager: NodeManager = NodeManager::new(
             nodes,
-            adapter,
+            transport,
         );
 
-        let adapter = Box::from(Tcp::new());
-        let mut server = Server::new(manager, adapter);
-        match server.start(String::from("localhost:2222")) {
+        let tcp_conn_srv: Tcp = Tcp::connect(String::from("localhost:5455"));
+
+        let transport: Box<Transport> = Transport::new(&t);
+
+        // Takes a server connection
+        let server = Server::new(manager, transport);
+        match server.listen() {
             Ok(()) => println!("server running"),
             Err(e) => panic!("failed to start: {:?}", e),
-        };
+        }
     }
+
 
     if args[1] == String::from("servant") && args[2] != String::from("") {
         println!("Servant mode");
 
-        let adapter = Box::from(Tcp::new());
-        let manager = NodeManager::new(
+        let t = Tcp::connect(String::from("localhost:5454"));
+
+        let transport: Box<Transport> = Transport::new(&t);
+        let manager: NodeManager = NodeManager::new(
             HashMap::new(),
-            adapter,
+            transport,
         );
 
-        let adapter = Box::from(Tcp::new());
-        // @todo - should handle finding an available port more gracefully here...
-        let mut client = Server::new(manager, adapter);
-        match client.connect(args[2].to_string()) {
+        let api_conn: Tcp = Tcp::connect(args[2].to_string());
+
+        let transport: Box<Transport> = Transport::new(&t);
+
+        let client = Server::new(manager, transport);
+        match client.listen() {
             Ok(()) => println!("Connected to master node on: {:?}", args[2]),
             Err(e) => panic!("failed to connect to master node on: {:?} error: {:?}", args[2], e),
-        }
-
-        // @todo - need to configure this
-        match client.start("localhost:2223".to_string()) {
-            Ok(()) => println!("Connected to server"),
-            Err(e) => println!("Error connecting to server: {:?}", e),
         }
     }
 

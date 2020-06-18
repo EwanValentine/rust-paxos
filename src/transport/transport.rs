@@ -1,31 +1,34 @@
 use crate::transport::handler::Callback;
+use tokio::net::ToSocketAddrs;
 
 pub trait Adapter {
-  fn connect(self, addr: String) -> std::io::Result<()>;
   fn disconnect(self) -> std::io::Result<()>;
   fn listen(self, handler: &dyn Callback) -> std::io::Result<()>;
 }
 
-pub struct Transport<'a> {
-  adapter: Box<dyn Adapter>,
+#[derive(Debug)]
+pub struct Transport {
+  adapter: dyn Adapter
 }
 
-impl Transport<'_> {
-  fn new(adapter: Box<dyn Adapter>) -> Transport {
-    Transport {
-      adapter,
-    }
+impl Transport {
+  pub fn new(adapter: &impl Adapter) -> Box<Transport> {
+    Box::from(Transport { adapter })
   }
 
-  fn connect(self, addr: String) -> std::io::Result<()> {
+  pub fn connect(self, addr: String) -> std::io::Result<()> {
     self.adapter.connect(addr)
   }
 
-  fn disconnect(self) -> std::io::Result<()> {
+  pub fn connect_with_stream<S>(self, stream: S) -> std::io::Result<(S)> {
+    self.adapter.connect_with_stream(stream)
+  }
+
+  pub fn disconnect(self) -> std::io::Result<()> {
     self.adapter.disconnect()
   }
 
-  fn listen(self, handler: &dyn Callback) -> std::io::Result<()> {
+  pub fn listen(self, handler: &dyn Callback) -> std::io::Result<()> {
     self.adapter.listen(handler)
   }
 }

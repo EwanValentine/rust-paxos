@@ -4,24 +4,24 @@ use std::net::{TcpStream, Shutdown};
 use std::io::{Read, Write};
 use crate::transport::transport::Adapter;
 
-pub struct Tcp {
-    stream: Option<Box<TcpStream>>,
+pub struct Tcp<'a> {
+    stream: &'a TcpStream,
 }
 
-impl Tcp {
-    fn new() -> Self {
-        Tcp {
-            stream: Option::None,
-        }
+impl Tcp<'_> {
+    pub fn connect(addr: String) -> Self {
+        let stream = TcpStream::bind(addr.to_string())?;
+        stream.write(format!("connect->{}", addr).as_bytes())?;
+        Self { stream }
     }
 
-    fn connect(&mut self, addr: String) -> std::io::Result<()> {
-        self.stream = TcpStream::bind(addr.to_string())?;
-        self.stream.write(format!("connect->{}", addr).as_bytes())?;
-        Ok(())
+    pub fn connect_with_stream(stream: &TcpStream) -> Self {
+        Self { stream }
     }
+}
 
-    fn disconnect(&mut self) -> std::io::Result<()> {
+impl Adapter for Tcp<'_> {
+    fn disconnect(self) -> std::io::Result<()> {
         self.stream.shutdown(Shutdown::Both)?;
         Ok(())
     }
