@@ -1,9 +1,12 @@
-use crate::transport::handler::Callback;
 use tokio::net::ToSocketAddrs;
 
+// Connection isn't included here, because we connect, return an instance,
+// then passed the connected instance into the server. So by that point,
+// we only need these methods.
 pub trait Adapter {
   fn disconnect(self) -> std::io::Result<()>;
-  fn listen(self, handler: &dyn Callback) -> std::io::Result<()>;
+  fn listen(&mut self, handler: fn(data: [u8; 1024])) -> std::io::Result<()>;
+  fn write(&mut self, message: &[u8]) -> std::io::Result<()>;
 }
 
 #[derive(Debug)]
@@ -16,8 +19,8 @@ impl Transport {
     Box::from(Transport { adapter })
   }
 
-  pub fn connect(self, addr: String) -> std::io::Result<()> {
-    self.adapter.connect(addr)
+  pub fn connect<T>(self, addr: String) -> std::io::Result<(T)> {
+    Ok(self.adapter.connect(addr))
   }
 
   pub fn connect_with_stream<S>(self, stream: S) -> std::io::Result<(S)> {
@@ -28,7 +31,12 @@ impl Transport {
     self.adapter.disconnect()
   }
 
-  pub fn listen(self, handler: &dyn Callback) -> std::io::Result<()> {
+  pub fn listen(&mut self, handler: fn(data: [u8; 1024])) -> std::io::Result<()> {
     self.adapter.listen(handler)
+  }
+
+  pub fn write(&mut self, message: &[u8]) -> std::io::Result<()> {
+    self.adapter.write(message);
+    Ok(())
   }
 }

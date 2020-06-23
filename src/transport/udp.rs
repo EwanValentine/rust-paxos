@@ -1,6 +1,5 @@
 use tokio::net::UdpSocket;
 use crate::transport::transport::Adapter;
-use crate::transport::handler::Callback;
 use std::thread;
 use std::io::ErrorKind;
 use std::time::{Duration, Instant};
@@ -10,9 +9,8 @@ pub struct Udp {
 }
 
 impl Udp {
-    fn connect(addr: String) -> Self {
-        let stream = UdpSocket::bind(addr.to_string())?;
-        stream.broadcast();
+    async fn connect(addr: String) -> Self {
+        let stream = UdpSocket::bind(&addr).await;
         Udp { stream }
     }
 
@@ -26,25 +24,24 @@ impl Adapter for Udp {
         Ok(())
     }
 
-    fn listen(self, handler: &dyn Callback) -> std::io::Result<()> {
+    fn listen(&mut self, handler: fn(data: [u8; 1024])) -> std::io::Result<()> {
         let start = Instant::now();
-        let mut buf = [0u8; 1024];
-
         while start.elapsed().as_secs() < 1 {
-            let result = self.stream.recv(&mut buf);
-            match result {
-                Ok(num_bytes) => {
-                    handler.callback(buf)
+            let mut buf = [0u8; 1024];
+            let data = match self.stream.recv_from(&mut buf) {
+                Ok(rec) => {
+                    handler(rec);
                 },
-                Err(ref err) if err.kind() != ErrorKind::WouldBlock => {
-                    println!("Failure: {}", err)
-                }
-                _ => {}
-            }
+                Err(_) => {},
+            };
 
             thread::sleep(Duration::from_millis(5));
         }
 
+        Ok(())
+    }
+
+    fn write(&mut self, message: &[u8]) -> std::io::Result<()> {
         Ok(())
     }
 }

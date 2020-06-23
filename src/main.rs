@@ -3,10 +3,8 @@ extern crate tokio;
 use std::env;
 use std::io::prelude::*;
 use std::collections::HashMap;
-use std::net::{TcpListener, TcpStream};
 
 mod transport;
-use std::borrow::Borrow;
 use crate::transport::transport::{Adapter, Transport};
 use crate::transport::tcp::Tcp;
 use std::error::Error;
@@ -69,19 +67,19 @@ impl NodeManager {
     // each node complies with 2F + 1
 }
 
-struct Server {
+struct Server<'a> {
     addr: String,
     manager: NodeManager,
-    pub transport: Box<Transport>,
+    pub transport: &'a Transport,
 }
 
-impl Server {
+impl<'a> Server<'a> {
 
     // new takes the node manager, which stores a list of references to each node
     // it also takes a transport adapter, for spinning up the leader node. The communication
     // between client to leader node, and leader node to follower nodes, are decoupled,
     // so that they can use different protocols.
-    pub fn new(manager: NodeManager, transport: Box<Transport>) -> Self {
+    pub fn new(manager: NodeManager, transport: &'a Transport) -> Self {
         Server {
             addr: "localhost:2222".to_string(),
             manager,
@@ -90,19 +88,23 @@ impl Server {
     }
 
     pub fn listen(self) -> std::io::Result<()> {
-        self.transport.listen(self.handle)
+        self.transport.listen(|res| {
+            let msg = res.to_ascii_lowercase();
+            println!("Test: {:?}", msg)
+        })
     }
 
-    pub fn connect(self, addr: String) -> std::io::Result<()> {
-        let stream = self.transport.connect(addr);
+    pub fn connect<T>(&mut self, addr: String) -> std::io::Result<()> {
+        let stream: std::io::Result<T> = self.transport.connect(addr);
         match stream {
-            Ok(t) => stream.write(format!("connect->{}", addr).as_bytes())?,
+
+            Ok(t) => self.transport.write(format!("connect->{}", addr).as_bytes())?,
             _ => {}
         }
         Ok(())
     }
 
-    fn handle(&mut self, msg: String) {
+    fn callback(&mut self, msg: String) {
 
         // Example connect->localhost:1234
         let mut parts = msg.split("->").fuse();
@@ -136,11 +138,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Create state for desired count
     // and node status. I.e n reachable nodes, include heart beat perhaps
 
-    // Bi-modal operation, master/servant.
+    // Bi-modal operation, leader/follower.
     // Master must self-register and await servants
     // Servants must take a master ip address and join
 
-    // Master
+    // Leader
     // Start TCP server
     // Register
 
@@ -165,36 +167,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
             transport,
         );
 
-        let tcp_conn_srv: Tcp = Tcp::connect(String::from("localhost:5455"));
-
         let transport: Box<Transport> = Transport::new(&t);
 
         // Takes a server connection
-        let server = Server::new(manager, transport);
-        match server.listen() {
+        let mut server = Server::new(manager, &transport);
+        match server.connect::<Tcp>(String::from("localhost:5454")) {
             Ok(()) => println!("server running"),
             Err(e) => panic!("failed to start: {:?}", e),
         }
     }
 
-
     if args[1] == String::from("servant") && args[2] != String::from("") {
         println!("Servant mode");
 
         let t = Tcp::connect(String::from("localhost:5454"));
-
         let transport: Box<Transport> = Transport::new(&t);
         let manager: NodeManager = NodeManager::new(
             HashMap::new(),
             transport,
         );
 
-        let api_conn: Tcp = Tcp::connect(args[2].to_string());
+        // let api_conn: Tcp = Tcp::connect(args[2].to_string());
 
         let transport: Box<Transport> = Transport::new(&t);
 
-        let client = Server::new(manager, transport);
-        match client.listen() {
+        let mut client = Server::new(manager, &transport);
+        match client.connect::<Tcp>(String::from("localhost:5454")) {
             Ok(()) => println!("Connected to master node on: {:?}", args[2]),
             Err(e) => panic!("failed to connect to master node on: {:?} error: {:?}", args[2], e),
         }
