@@ -1,20 +1,22 @@
-use tokio::net::ToSocketAddrs;
+use async_std::net::ToSocketAddrs;
 
 // Connection isn't included here, because we connect, return an instance,
 // then passed the connected instance into the server. So by that point,
 // we only need these methods.
+//
 pub trait Adapter {
+  fn connect<T>(addr: String) -> std::io::Result<(T)>;
   fn disconnect(self) -> std::io::Result<()>;
   fn listen(&mut self, handler: fn(data: [u8; 1024])) -> std::io::Result<()>;
   fn write(&mut self, message: &[u8]) -> std::io::Result<()>;
 }
 
 #[derive(Debug)]
-pub struct Transport {
-  adapter: dyn Adapter
+pub struct Transport<'a> {
+  adapter: &'a Adapter
 }
 
-impl Transport {
+impl<'a> Transport<'a> {
   pub fn new(adapter: &impl Adapter) -> Box<Transport> {
     Box::from(Transport { adapter })
   }

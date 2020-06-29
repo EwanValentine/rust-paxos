@@ -1,5 +1,3 @@
-extern crate tokio;
-
 use std::env;
 use std::io::prelude::*;
 use std::collections::HashMap;
@@ -8,6 +6,8 @@ mod transport;
 use crate::transport::transport::{Adapter, Transport};
 use crate::transport::tcp::Tcp;
 use std::error::Error;
+use async_std::prelude::*;
+use async_std::io;
 
 // Desired count
 // n = 2F + 1 where F is failed/inactive nodes
@@ -30,9 +30,9 @@ struct Node {
 }
 
 #[derive(Debug)]
-struct NodeManager {
+struct NodeManager<'a> {
     nodes: HashMap<String, Node>,
-    transport: Box<Transport>,
+    transport: Box<Transport<'a>>,
 }
 
 impl NodeManager {
@@ -69,8 +69,8 @@ impl NodeManager {
 
 struct Server<'a> {
     addr: String,
-    manager: NodeManager,
-    pub transport: &'a Transport,
+    manager: NodeManager<'a>,
+    pub transport: &'a Transport<'a>,
 }
 
 impl<'a> Server<'a> {
@@ -120,7 +120,6 @@ impl<'a> Server<'a> {
                     health: Status::WELL,
                 });
 
-                println!("Nodes: {:?}", self.manager.nodes);
             },
             Some("disconnect") => {
                 let addr: String = msg.map(|s| s.to_string()).unwrap();
@@ -132,8 +131,8 @@ impl<'a> Server<'a> {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+#[async_std::main]
+async fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     // Create state for desired count
     // and node status. I.e n reachable nodes, include heart beat perhaps
@@ -159,7 +158,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let mut nodes = HashMap::new();
         nodes.insert(String::from("master"), master_node);
 
-        let t: Tcp = Tcp::connect(String::from("localhost:5454"));
+        let t = match Tcp::connect(String::from("localhost:5454")) {
+          Ok(conn) => conn,
+          Err(err) => {},
+        }
 
         let transport: Box<Transport> = Transport::new(&t);
         let manager: NodeManager = NodeManager::new(

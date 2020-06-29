@@ -7,7 +7,8 @@ pub struct Tcp<'a> {
     stream: &'a TcpStream,
 }
 
-impl<'a> Tcp<'a> {
+impl<'a> Adapter for Tcp<'a> {
+
     pub fn connect(addr: String) -> Self {
         let stream = TcpStream::connect(addr.to_string());
         let conn = match stream {
@@ -24,9 +25,7 @@ impl<'a> Tcp<'a> {
     pub fn connect_with_stream(stream: &'a TcpStream) -> Self {
         Self { stream }
     }
-}
 
-impl Adapter for Tcp<'_> {
     fn disconnect(self) -> std::io::Result<()> {
         self.stream.shutdown(Shutdown::Both)?;
         Ok(())
