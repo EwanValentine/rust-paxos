@@ -6,6 +6,7 @@ use async_std::net::ToSocketAddrs;
 //
 pub trait Adapter {
   fn connect<T>(addr: String) -> std::io::Result<(T)>;
+  fn connect_with_stream<T, S>(stream: S) -> std::io::Result<(T)>;
   fn disconnect(self) -> std::io::Result<()>;
   fn listen(&mut self, handler: fn(data: [u8; 1024])) -> std::io::Result<()>;
   fn write(&mut self, message: &[u8]) -> std::io::Result<()>;
@@ -22,11 +23,13 @@ impl<'a> Transport<'a> {
   }
 
   pub fn connect<T>(self, addr: String) -> std::io::Result<(T)> {
-    Ok(self.adapter.connect(addr))
+    self.adapter.connect(addr);
+    Ok(self)
   }
 
-  pub fn connect_with_stream<S>(self, stream: S) -> std::io::Result<(S)> {
-    self.adapter.connect_with_stream(stream)
+  pub fn connect_with_stream<T, S>(self, stream: S) -> std::io::Result<(T)> {
+    self.adapter.connect_with_stream(stream);
+    Ok(self)
   }
 
   pub fn disconnect(self) -> std::io::Result<()> {

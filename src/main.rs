@@ -35,7 +35,7 @@ struct NodeManager<'a> {
     transport: Box<Transport<'a>>,
 }
 
-impl NodeManager {
+impl NodeManager<'_> {
     fn new(
         nodes: HashMap<String, Node>,
         transport: Box<Transport>,
@@ -159,9 +159,9 @@ async fn main() -> io::Result<()> {
         nodes.insert(String::from("master"), master_node);
 
         let t = match Tcp::connect(String::from("localhost:5454")) {
-          Ok(conn) => conn,
+          Ok(adapter) => adapter,
           Err(err) => {},
-        }
+        };
 
         let transport: Box<Transport> = Transport::new(&t);
         let manager: NodeManager = NodeManager::new(

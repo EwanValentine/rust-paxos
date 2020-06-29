@@ -9,7 +9,7 @@ pub struct Tcp<'a> {
 
 impl<'a> Adapter for Tcp<'a> {
 
-    pub fn connect(addr: String) -> Self {
+    fn connect(addr: String) -> Self {
         let stream = TcpStream::connect(addr.to_string());
         let conn = match stream {
             Ok(mut t) => {
@@ -22,7 +22,7 @@ impl<'a> Adapter for Tcp<'a> {
         conn
     }
 
-    pub fn connect_with_stream(stream: &'a TcpStream) -> Self {
+    fn connect_with_stream(stream: &'a TcpStream) -> Self {
         Self { stream }
     }
 
